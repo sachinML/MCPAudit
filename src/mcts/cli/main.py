@@ -1269,6 +1269,10 @@ def inventory(
         bool,
         typer.Option("--paths-only", help="List config file paths without parsing server details"),
     ] = False,
+    config_path_opt: Annotated[
+        Path | None,
+        typer.Option("--config-path", help="Scope to a single config file instead of auto-discovery"),
+    ] = None,
 ) -> None:
     """Discover MCP servers configured across 12+ agent clients."""
     from mcts.analyzers.cross_server import CrossServerAnalyzer
@@ -1341,7 +1345,7 @@ def inventory(
             raise typer.Exit(code=1)
         return
 
-    report = run_inventory(skills=skills, skills_dirs=skills_dir)
+    report = run_inventory(skills=skills, skills_dirs=skills_dir, config_path=config_path_opt)
     entries = enrich_with_tool_names(report.entries) if scan else report.entries
 
     shadow_findings = enrich_findings(CrossServerAnalyzer(entries).analyze_inventory(entries))

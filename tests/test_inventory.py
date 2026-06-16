@@ -74,4 +74,21 @@ def test_path_only_returns_tuples(tmp_path: Path) -> None:
     for client, path in rows:
         assert isinstance(client, str)
         assert isinstance(path, Path)
-        
+
+
+def test_config_path_scopes_to_single_file(tmp_path: Path) -> None:
+    config = tmp_path / "custom.json"
+    config.write_text(json.dumps({
+        "mcpServers": {"myserver": {"command": "node", "args": ["sever.js"]}}
+    }))
+    from mcts.inventory.runner import run_inventory
+    report = run_inventory(config_path=config)
+    assert len(report.entries) == 1
+    assert report.entries[0].server_name == "myserver"
+    assert report.clients_scanned == ["user"]
+
+
+def test_config_path_missing_file_returns_empty(tmp_path: Path) -> None:
+    from mcts.inventory.runner import run_inventory
+    report = run_inventory(config_path=tmp_path / "nope.json")
+    assert len(report.entries) == 0
