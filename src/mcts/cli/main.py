@@ -1265,6 +1265,10 @@ def inventory(
         bool,
         typer.Option("-redact-paths", help="Replace home directory with ~ in output"),
     ] = False,
+    paths_only: Annotated[
+        bool,
+        typer.Option("--paths-only", help="List config file paths without parsing server details"),
+    ] = False,
 ) -> None:
     """Discover MCP servers configured across 12+ agent clients."""
     from mcts.analyzers.cross_server import CrossServerAnalyzer
@@ -1289,6 +1293,18 @@ def inventory(
     except ValueError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=2) from exc
+    
+    if paths_only:
+        from mcts.inventory.discoverers import discover_config_paths, redact_home
+        rows = discover_config_paths()
+        if not rows:
+            console.print("[dim]NO MCP config files found.[/dim]")
+            return
+        console.print(f"[bold]MCP config files[/bold] - {len(rows)} found")
+        for client, path in rows:
+            display = redact_home(str(path)) if redact_paths else str(path)
+            console.print(f" [{client}] {display}")
+        return
 
     inv_config = merge_scan_config_with_policy(
         ScanConfig(

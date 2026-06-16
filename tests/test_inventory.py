@@ -66,3 +66,12 @@ def test_redact_home() -> None:
     home = str(Path.home())
     assert redact_home(f"{home}/.cursor/mcp.json") == "~/.cursor/mcp.json"
     assert redact_home("/other/path") == "/other/path"
+
+
+def test_path_only_returns_tuples(tmp_path: Path) -> None:
+    from mcts.inventory.discoverers import discover_config_paths
+    rows = discover_config_paths()
+    for client, path in rows:
+        assert isinstance(client, str)
+        assert isinstance(path, Path)
+        
