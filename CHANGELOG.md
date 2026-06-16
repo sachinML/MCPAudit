@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **v2 benchmark gauge** — doughnut gauge for `security_score` in v2 risk panel
 - **Terminal v2-first** — when `scoring_version=both`, Absolute Risk / Security Score appear first
 - **MCP IDE** — `min_category_score_v2` comma gates on `scan_mcp_target`
+- 'mcts inventory' privacy controls: '--redact-paths', '--paths-only', '--config-path' (#87)
 
 ### Fixed
 
