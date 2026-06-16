@@ -1259,10 +1259,11 @@ def inventory(
     ] = None,
     ignore_policy: Annotated[
         bool,
-        typer.Option(
-            "--ignore-policy",
-            help="Skip merging .mcts/policy.yaml into inventory scans",
-        ),
+        typer.Option("--ignore-policy", help="Skip merging .mcts/policy.yaml into inventory scans"),
+    ] = None,
+    redact_paths: Annotated[
+        bool,
+        typer.Option("-redact-paths", help="Replace home directory with ~ in output"),
     ] = False,
 ) -> None:
     """Discover MCP servers configured across 12+ agent clients."""
@@ -1272,6 +1273,7 @@ def inventory(
     from mcts.core.config import ScanConfig
     from mcts.governance import load_policy, merge_scan_config_with_policy
     from mcts.inventory.runner import enrich_with_tool_names, run_inventory
+    from mcts.inventory.discoverers import redact_home
     from mcts.inventory.scan_all import (
         collect_scan_all_gate_violations,
         default_output_path,
@@ -1341,7 +1343,8 @@ def inventory(
         console.print(f"  • {client}")
     for entry in entries:
         tools = f" ({len(entry.tools)} tools)" if entry.tools else ""
-        console.print(f"  [{entry.client}] {entry.server_name}{tools} — {entry.config_path}")
+        display_path = redact_home(entry.config_path) if redact_paths else entry.config_path
+        console.print(f"  [{entry.client}] {entry.server_name}{tools} — {display_path}")
 
     if skills:
         console.print(f"\n[bold]Skills[/bold] — {len(report.skills)} SKILL.md file(s)")
@@ -1365,7 +1368,10 @@ def inventory(
     payload = {
         "clients_scanned": report.clients_scanned,
         "config_files_found": report.config_files_found,
-        "entries": [entry.model_dump() for entry in entries],
+        "entries": [{**entry.model_dump(), "confing_path": redact_home(entry.config_path)} 
+                    if redact_paths else entry.model_dump()
+                    for entry in entries
+                    ],
         "shadow_findings": [f.model_dump() for f in shadow_findings],
     }
     if skills:

@@ -59,3 +59,10 @@ def test_taxonomy_catalog_loads() -> None:
     data = load_taxonomy()
     assert "MCTS-T-1001" in data["techniques"]
     assert data["mitigations"]
+
+
+def test_redact_home() -> None:
+    from mcts.inventory.discoverers import redact_home
+    home = str(Path.home())
+    assert redact_home(f"{home}/.cursor/mcp.json") == "~/.cursor/mcp.json"
+    assert redact_home("/other/path") == "/other/path"

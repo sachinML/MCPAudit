@@ -8,6 +8,13 @@ from pathlib import Path
 from mcts.inventory.client_registry import config_paths_for_platform
 from mcts.inventory.models import InventoryEntry
 
+def redact_home(path_str: str) -> str:
+    """Replace the user's home directory prefix with ~."""
+    home = str(Path.home())
+    if path_str.startswith(home):
+        return "~" + path_str[len(home):]
+    return path_str
+
 
 def discover_config_paths() -> list[tuple[str, Path]]:
     rows: list[tuple[str, Path]] = []
