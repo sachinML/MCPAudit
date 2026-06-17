@@ -351,7 +351,7 @@ mcts inventory [options]
 | `--ignore-policy` | off | Skip merging `.mcts/policy.yaml` |
 | `--paths-only` | false | List config file paths without parsing server details |
 | `--config-path` | — | Scope discovery to a single config file |
-| `--redact-paths` | false | Replace home directory with `~` in output |
+| `--redact-paths` | false | Replace home directory with `~` in inventory entry and skill paths |
 | `--output`, `-o` | — | Write inventory JSON |
 | `--theme` | `cyber` | Terminal theme |
 
@@ -435,9 +435,6 @@ Exit **0** on pass/medium verdict; **1** on critical/high; **2** on errors.
 When `--scoring v2` or `both` and `score_v2` is present under **`off`**, **verdict** may use v2 `risk_level`. Under **`warn`**, verdict follows display severity on security findings (overlap chains capped). Under **`enforce`**, verdict follows gate summary (display-aligned).
 
 **Static-only coverage:** when static discovery finds **zero MCP tools** (e.g. prompt-only servers), the `attack_chains` phase is marked `skipped` in the JSON report. Check `pentest_limits.coverage` (`static-only` vs `full`) and `pentest_limits.attack_chains_available` to see what ran.
-> **Static-only mode:** Pentest always runs static analysis. Attack chains and protocol fuzz require
-discovered MCP tools. when tools=0 `attack-chains` is marked `skiiped` and coverage is reported as
-`static-only`. use `mcts doctor.` to verify your entrypoint if tools are not detected.
 
 ---
 

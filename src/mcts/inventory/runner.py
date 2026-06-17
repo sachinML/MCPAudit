@@ -16,18 +16,18 @@ def run_inventory(
     skills_dirs: list[Path] | None = None,
     config_path: Path | None = None,
 ) -> InventoryReport:
+    skill_entries = discover_skills(project_root=Path.cwd(), extra_dirs=skills_dirs) if skills else []
 
     if config_path is not None:
         path = config_path.expanduser().resolve()
         if not path.exists():
-            return InventoryReport()
+            return InventoryReport(skills=skill_entries)
         entries = parse_config_file("user", path)
-        skill_entries = discover_skills(project_root=Path.cwd(), extra_dirs=skills_dirs) if skills else []
         return InventoryReport(
             entries=entries,
             clients_scanned=["user"] if entries else [],
-            config_file_found=1 if path.exists() else 0,
-            skill=skill_entries,
+            config_files_found=1,
+            skills=skill_entries,
         )
 
     entries: list[InventoryEntry] = []
@@ -38,8 +38,6 @@ def run_inventory(
         files_found += 1
         clients.add(client)
         entries.extend(parse_config_file(client, path))
-
-    skill_entries = discover_skills(project_root=Path.cwd(), extra_dirs=skills_dirs) if skills else []
 
     return InventoryReport(
         entries=entries,

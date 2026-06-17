@@ -807,6 +807,20 @@ def scan(
             help="Disable chain multiplier (chain_factor=1.0); under v2/both the analyzer still runs",
         ),
     ] = False,
+    attack_graph_counterfactuals: Annotated[
+        bool,
+        typer.Option(
+            "--attack-graph-counterfactuals/--no-attack-graph-counterfactuals",
+            help="Attach counterfactual remediation to attack graph template findings (default on)",
+        ),
+    ] = True,
+    attack_graph_compress_ui: Annotated[
+        bool,
+        typer.Option(
+            "--attack-graph-compress-ui/--no-attack-graph-compress-ui",
+            help="Compress matched attack paths in report export for dashboard readability (default on)",
+        ),
+    ] = True,
     min_security_score: Annotated[
         int | None,
         typer.Option(
@@ -1077,6 +1091,8 @@ def scan(
         surface_scoped_analyzers=surface_scoped,
         scoring_mode=scoring.lower(),
         enable_attack_chains=not no_attack_chains,
+        attack_graph_enable_counterfactuals=attack_graph_counterfactuals,
+        attack_graph_compress_for_ui=attack_graph_compress_ui,
         min_security_score=min_security_score,
         max_absolute_risk=max_absolute_risk,
         max_risk_level=max_risk_level.lower() if max_risk_level else None,
@@ -1259,11 +1275,14 @@ def inventory(
     ] = None,
     ignore_policy: Annotated[
         bool,
-        typer.Option("--ignore-policy", help="Skip merging .mcts/policy.yaml into inventory scans"),
-    ] = None,
+        typer.Option(
+            "--ignore-policy",
+            help="Skip merging .mcts/policy.yaml into inventory scans",
+        ),
+    ] = False,
     redact_paths: Annotated[
         bool,
-        typer.Option("-redact-paths", help="Replace home directory with ~ in output"),
+        typer.Option("--redact-paths", help="Replace home directory with ~ in output"),
     ] = False,
     paths_only: Annotated[
         bool,
@@ -1280,7 +1299,12 @@ def inventory(
     from mcts.analyzers.toxic_flows import analyze_inventory as analyze_toxic_flows
     from mcts.core.config import ScanConfig
     from mcts.governance import load_policy, merge_scan_config_with_policy
-    from mcts.inventory.discoverers import redact_home
+    from mcts.inventory.discoverers import (
+        discover_config_paths,
+        redact_entry_dict,
+        redact_home,
+        redact_skill_dict,
+    )
     from mcts.inventory.runner import enrich_with_tool_names, run_inventory
     from mcts.inventory.scan_all import (
         collect_scan_all_gate_violations,
@@ -1298,17 +1322,28 @@ def inventory(
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=2) from exc
 
-    if paths_only:
-        from mcts.inventory.discoverers import discover_config_paths, redact_home
+    if paths_only and (scan or scan_all or skills):
+        console.print(
+            "[red]Error:[/red] --paths-only cannot be combined with --scan, --scan-all, or --skills."
+        )
+        raise typer.Exit(code=2)
+    if paths_only and output is not None:
+        console.print("[red]Error:[/red] --paths-only does not support --output.")
+        raise typer.Exit(code=2)
 
-        rows = discover_config_paths()
+    if paths_only:
+        if config_path_opt is not None:
+            scoped = config_path_opt.expanduser().resolve()
+            rows = [("user", scoped)] if scoped.exists() else []
+        else:
+            rows = discover_config_paths()
         if not rows:
-            console.print("[dim]NO MCP config files found.[/dim]")
+            console.print("[dim]No MCP config files found.[/dim]")
             return
-        console.print(f"[bold]MCP config files[/bold] - {len(rows)} found")
+        console.print(f"[bold]MCP config files[/bold] — {len(rows)} found")
         for client, path in rows:
             display = redact_home(str(path)) if redact_paths else str(path)
-            console.print(f" [{client}] {display}")
+            console.print(f"  [{client}] {display}")
         return
 
     inv_config = merge_scan_config_with_policy(
@@ -1322,7 +1357,12 @@ def inventory(
     )
 
     if scan_all:
-        inventory_report, scan_rows = run_inventory_scan_all(inv_config)
+        inventory_report, scan_rows = run_inventory_scan_all(
+            inv_config,
+            config_path=config_path_opt,
+            skills=skills,
+            skills_dirs=skills_dir,
+        )
         console.print(
             f"[bold]Inventory scan-all[/bold] — {len(scan_rows)} server(s), "
             f"{inventory_report.config_files_found} config file(s)"
@@ -1346,7 +1386,11 @@ def inventory(
             raise typer.Exit(code=1)
         return
 
-    report = run_inventory(skills=skills, skills_dirs=skills_dir, config_path=config_path_opt)
+    report = run_inventory(
+        skills=skills,
+        skills_dirs=skills_dir,
+        config_path=config_path_opt,
+    )
     entries = enrich_with_tool_names(report.entries) if scan else report.entries
 
     shadow_findings = enrich_findings(CrossServerAnalyzer(entries).analyze_inventory(entries))
@@ -1370,7 +1414,8 @@ def inventory(
     if skills:
         console.print(f"\n[bold]Skills[/bold] — {len(report.skills)} SKILL.md file(s)")
         for skill in report.skills:
-            console.print(f"  [{skill.client}] {skill.skill_name} — {skill.skill_path}")
+            skill_path = redact_home(skill.skill_path) if redact_paths else skill.skill_path
+            console.print(f"  [{skill.client}] {skill.skill_name} — {skill_path}")
         if skill_findings:
             console.print(f"\n[yellow]Skill findings:[/yellow] {len(skill_findings)} issue(s)")
             for finding in skill_findings[:5]:
@@ -1389,16 +1434,13 @@ def inventory(
     payload = {
         "clients_scanned": report.clients_scanned,
         "config_files_found": report.config_files_found,
-        "entries": [
-            {**entry.model_dump(), "confing_path": redact_home(entry.config_path)}
-            if redact_paths
-            else entry.model_dump()
-            for entry in entries
-        ],
+        "entries": [redact_entry_dict(entry.model_dump(), redact=redact_paths) for entry in entries],
         "shadow_findings": [f.model_dump() for f in shadow_findings],
     }
     if skills:
-        payload["skills"] = [skill.model_dump() for skill in report.skills]
+        payload["skills"] = [
+            redact_skill_dict(skill.model_dump(), redact=redact_paths) for skill in report.skills
+        ]
         payload["skill_findings"] = [f.model_dump() for f in skill_findings]
     if toxic_findings:
         payload["toxic_flow_findings"] = [f.model_dump() for f in toxic_findings]
@@ -2118,11 +2160,32 @@ def doctor(
         bool,
         typer.Option("--json", help="Emit machine-readable JSON"),
     ] = False,
+    suggest_fixes: Annotated[
+        bool,
+        typer.Option(
+            "--suggest-fixes",
+            help="List attack-graph template remediations from a prior scan report",
+        ),
+    ] = False,
+    report: Annotated[
+        Path | None,
+        typer.Option(
+            "--report",
+            help="Scan JSON report for --suggest-fixes (e.g. mcts_analysis/scan-report.json)",
+        ),
+    ] = None,
 ) -> None:
     """Preflight checks before your first scan (no live probes)."""
     from mcts.cli.doctor import run_doctor
 
-    code = run_doctor(path, deep=deep, json_output=json_output, output=output)
+    code = run_doctor(
+        path,
+        deep=deep,
+        json_output=json_output,
+        output=output,
+        suggest_fixes=suggest_fixes,
+        report=report,
+    )
     if code:
         raise typer.Exit(code=code)
 
