@@ -1280,8 +1280,8 @@ def inventory(
     from mcts.analyzers.toxic_flows import analyze_inventory as analyze_toxic_flows
     from mcts.core.config import ScanConfig
     from mcts.governance import load_policy, merge_scan_config_with_policy
-    from mcts.inventory.runner import enrich_with_tool_names, run_inventory
     from mcts.inventory.discoverers import redact_home
+    from mcts.inventory.runner import enrich_with_tool_names, run_inventory
     from mcts.inventory.scan_all import (
         collect_scan_all_gate_violations,
         default_output_path,
@@ -1297,9 +1297,10 @@ def inventory(
     except ValueError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=2) from exc
-    
+
     if paths_only:
         from mcts.inventory.discoverers import discover_config_paths, redact_home
+
         rows = discover_config_paths()
         if not rows:
             console.print("[dim]NO MCP config files found.[/dim]")
@@ -1388,10 +1389,12 @@ def inventory(
     payload = {
         "clients_scanned": report.clients_scanned,
         "config_files_found": report.config_files_found,
-        "entries": [{**entry.model_dump(), "confing_path": redact_home(entry.config_path)} 
-                    if redact_paths else entry.model_dump()
-                    for entry in entries
-                    ],
+        "entries": [
+            {**entry.model_dump(), "confing_path": redact_home(entry.config_path)}
+            if redact_paths
+            else entry.model_dump()
+            for entry in entries
+        ],
         "shadow_findings": [f.model_dump() for f in shadow_findings],
     }
     if skills:
